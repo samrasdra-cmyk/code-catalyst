@@ -2,10 +2,14 @@ FROM python:3.10-slim
 
 WORKDIR /app
 
-# Install system dependencies
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install system dependencies and RabbitMQ/supervisor for multi-process deployment
 RUN apt-get update && apt-get install -y \
     nodejs \
     npm \
+    supervisor \
+    rabbitmq-server \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy and install Python dependencies for your worker
@@ -25,5 +29,5 @@ RUN cd frontend && npm install && npm run build
 # Copy the build to the backend's static directory
 RUN mkdir -p backend/public && cp -r frontend/build/* backend/public/
 
-# Start both the backend and the worker
-CMD ["sh", "-c", "cd backend && node src/app.js & python worker/main.py"]
+# Default container start command for Render
+CMD ["supervisord", "-c", "supervisord.conf"]

@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: codecatalyst
+    env: docker
+    dockerfilePath: Dockerfile
+    startCommand: supervisord -c supervisord.conf
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: RABBITMQ_URL
+        value: amqp://guest:guest@localhost:5672
+      - key: JOB_QUEUE_NAME
+        value: codecatalyst_jobs
+      - key: STATUS_QUEUE_NAME
+        value: codecatalyst_status
+      - key: CHROMA_HOST
+        value: localhost
+      - key: CHROMA_PORT
+        value: "8000"
+    healthCheckPath: /health
