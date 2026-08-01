@@ -14,11 +14,11 @@ services:
       - key: STATUS_QUEUE_NAME
         value: codecatalyst_status
       - key: CHROMA_HOST
-        value: "<CHROMA_HOST>"
+        value: chromadb
       - key: CHROMA_PORT
         value: "8000"
       - key: FRONTEND_ORIGIN
-        value: "https://<YOUR_RENDER_WEB_URL>"
+        value: "https://codecatalyst-web.onrender.com"   # <-- REPLACE with your actual URL after deployment
     healthCheckPath: /health
 
   - type: worker
@@ -34,7 +34,7 @@ services:
       - key: STATUS_QUEUE_NAME
         value: codecatalyst_status
       - key: CHROMA_HOST
-        value: "<CHROMA_HOST>"
+        value: chromadb
       - key: CHROMA_PORT
         value: "8000"
       - key: GROQ_API_KEY
