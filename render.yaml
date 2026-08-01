@@ -1,20 +1,37 @@
 services:
   - type: web
-    name: codecatalyst
+    name: codecatalyst-web
     env: docker
     dockerfilePath: Dockerfile
-    startCommand: supervisord -c supervisord.conf
+    startCommand: node backend/src/app.js
     envVars:
       - key: NODE_ENV
         value: production
       - key: RABBITMQ_URL
-        value: amqp://guest:guest@localhost:5672
+        value: "amqps://<RABBITMQ_USER>:<RABBITMQ_PASSWORD>@<RABBITMQ_HOST>/<RABBITMQ_VHOST>"
       - key: JOB_QUEUE_NAME
         value: codecatalyst_jobs
       - key: STATUS_QUEUE_NAME
         value: codecatalyst_status
       - key: CHROMA_HOST
-        value: localhost
+        value: "<CHROMA_HOST>"
       - key: CHROMA_PORT
         value: "8000"
     healthCheckPath: /health
+
+  - type: worker
+    name: codecatalyst-worker
+    env: docker
+    dockerfilePath: Dockerfile
+    startCommand: python worker/main.py
+    envVars:
+      - key: RABBITMQ_URL
+        value: "amqps://<RABBITMQ_USER>:<RABBITMQ_PASSWORD>@<RABBITMQ_HOST>/<RABBITMQ_VHOST>"
+      - key: JOB_QUEUE_NAME
+        value: codecatalyst_jobs
+      - key: STATUS_QUEUE_NAME
+        value: codecatalyst_status
+      - key: CHROMA_HOST
+        value: "<CHROMA_HOST>"
+      - key: CHROMA_PORT
+        value: "8000"

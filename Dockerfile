@@ -4,19 +4,17 @@ WORKDIR /app
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Install system dependencies and RabbitMQ/supervisor for multi-process deployment
+# Install Node for frontend build
 RUN apt-get update && apt-get install -y \
     nodejs \
     npm \
-    supervisor \
-    rabbitmq-server \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy and install Python dependencies for your worker
+# Copy and install Python dependencies for the worker
 COPY worker/requirements.txt worker/
 RUN pip install --no-cache-dir -r worker/requirements.txt
 
-# Copy and install Node dependencies for your backend
+# Copy and install Node dependencies for the backend
 COPY backend/package*.json backend/
 RUN cd backend && npm install
 
@@ -26,8 +24,8 @@ COPY . .
 # Build the React frontend
 RUN cd frontend && npm install && npm run build
 
-# Copy the build to the backend's static directory
+# Copy the frontend build into the backend static assets
 RUN mkdir -p backend/public && cp -r frontend/build/* backend/public/
 
-# Default container start command for Render
-CMD ["supervisord", "-c", "supervisord.conf"]
+# Default start command for the web service
+CMD ["node", "backend/src/app.js"]
