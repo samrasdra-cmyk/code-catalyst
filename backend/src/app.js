@@ -2,6 +2,7 @@ require("dotenv").config();
 const express = require("express");
 const http = require("http");
 const cors = require("cors");
+const fs = require("fs");
 
 const path = require("path");
 const { initSocket, emitJobEvent } = require("./socket");
@@ -19,11 +20,17 @@ app.get("/health", (_req, res) => res.json({ status: "ok" }));
 app.use("/api/repo", repoRoutes);
 
 // --- Serve React Frontend (Production) ---
-if (process.env.NODE_ENV === "production") {
-  const frontendBuildPath = path.join(__dirname, "../../frontend/build");
-  app.use(express.static(frontendBuildPath));
+const frontendBuildPath = path.join(__dirname, "../../frontend/build");
+const backendPublicPath = path.join(__dirname, "../public");
+const staticPath = fs.existsSync(frontendBuildPath) ? frontendBuildPath : backendPublicPath;
+
+if (fs.existsSync(path.join(staticPath, "index.html"))) {
+  app.use(express.static(staticPath));
   app.get("*", (req, res) => {
-    res.sendFile(path.join(frontendBuildPath, "index.html"));
+    if (req.path.startsWith("/api")) {
+      return res.status(404).json({ error: "Not found" });
+    }
+    res.sendFile(path.join(staticPath, "index.html"));
   });
 }
 

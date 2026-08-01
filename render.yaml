@@ -8,7 +8,7 @@ services:
       - key: NODE_ENV
         value: production
       - key: RABBITMQ_URL
-        value: "amqps://<RABBITMQ_USER>:<RABBITMQ_PASSWORD>@<RABBITMQ_HOST>/<RABBITMQ_VHOST>"
+        fromSecret: RABBITMQ_URL
       - key: JOB_QUEUE_NAME
         value: codecatalyst_jobs
       - key: STATUS_QUEUE_NAME
@@ -17,6 +17,8 @@ services:
         value: "<CHROMA_HOST>"
       - key: CHROMA_PORT
         value: "8000"
+      - key: FRONTEND_ORIGIN
+        value: "https://<YOUR_RENDER_WEB_URL>"
     healthCheckPath: /health
 
   - type: worker
@@ -26,7 +28,7 @@ services:
     startCommand: python worker/main.py
     envVars:
       - key: RABBITMQ_URL
-        value: "amqps://<RABBITMQ_USER>:<RABBITMQ_PASSWORD>@<RABBITMQ_HOST>/<RABBITMQ_VHOST>"
+        fromSecret: RABBITMQ_URL
       - key: JOB_QUEUE_NAME
         value: codecatalyst_jobs
       - key: STATUS_QUEUE_NAME
@@ -35,3 +37,7 @@ services:
         value: "<CHROMA_HOST>"
       - key: CHROMA_PORT
         value: "8000"
+      - key: GROQ_API_KEY
+        fromSecret: GROQ_API_KEY
+      - key: GROQ_MODEL
+        value: llama-3.1-70b-versatile
