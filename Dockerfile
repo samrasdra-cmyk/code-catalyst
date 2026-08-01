@@ -21,6 +21,14 @@ RUN cd backend && npm install
 # Copy the rest of the application code
 COPY . .
 
+# Accept Render's env vars as build args so Create React App can bake them in
+ARG REACT_APP_API_URL
+ARG REACT_APP_BACKEND_URL
+ARG REACT_APP_SOCKET_URL
+ENV REACT_APP_API_URL=$REACT_APP_API_URL
+ENV REACT_APP_BACKEND_URL=$REACT_APP_BACKEND_URL
+ENV REACT_APP_SOCKET_URL=$REACT_APP_SOCKET_URL
+
 # Build the React frontend
 RUN cd frontend && npm install && npm run build
 
