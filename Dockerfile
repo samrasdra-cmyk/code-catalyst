@@ -4,10 +4,11 @@ WORKDIR /app
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Install Node for frontend build
+# Install Node for frontend build, and supervisor to run backend+worker together
 RUN apt-get update && apt-get install -y \
     nodejs \
     npm \
+    supervisor \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy and install Python dependencies for the worker
@@ -35,5 +36,5 @@ RUN cd frontend && npm install && npm run build
 # Copy the frontend build into the backend static assets
 RUN mkdir -p backend/public && cp -r frontend/build/* backend/public/
 
-# Default start command for the web service
-CMD ["node", "backend/src/app.js"]
+# Run backend + worker together in this single (free) web service via supervisord
+CMD ["supervisord", "-c", "/app/supervisord.conf"]
