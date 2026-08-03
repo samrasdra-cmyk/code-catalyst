@@ -39,19 +39,28 @@ initSocket(server, process.env.NODE_ENV === "production" ? "*" : FRONTEND_ORIGIN
 
 // Bridge: every status event the Python worker drops on RabbitMQ gets
 // forwarded straight into the browser room for that job.
+let _retryDelay = 2000;
+
 function startStatusConsumer() {
   consumeStatusEvents((payload) => {
     const { jobId, event, data } = payload;
     if (!jobId || !event) return;
     emitJobEvent(jobId, event, data);
-  }).catch((err) => {
-    console.error(
-      "[app] could not start status consumer - is RabbitMQ up? Retrying in 5s...",
-      err.message
-    );
-    setTimeout(startStatusConsumer, 5000);
-  });
+  })
+    .then(() => {
+      _retryDelay = 2000; // reset backoff on success
+    })
+    .catch((err) => {
+      console.error(
+        `[app] Status consumer failed (${err.message}). Retrying in ${_retryDelay / 1000}s...`
+      );
+      setTimeout(() => {
+        _retryDelay = Math.min(_retryDelay * 2, 30000); // cap at 30s
+        startStatusConsumer();
+      }, _retryDelay);
+    });
 }
+
 
 startStatusConsumer();
 
