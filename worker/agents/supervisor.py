@@ -6,11 +6,13 @@ deterministic linear order, so the graph never stalls.
 """
 
 import os
+import concurrent.futures
 from groq import Groq, GroqError
 
 from core.status import emit_status
 
 GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.1-70b-versatile")
+GROQ_TIMEOUT = int(os.getenv("GROQ_TIMEOUT_SECONDS", "30"))
 
 _LINEAR_ORDER = ["planner", "security", "refactor", "critic", "end"]
 
@@ -63,23 +65,34 @@ def route(state: dict) -> dict:
                 f"critic_passed={state.get('critic_passed')}, "
                 f"loop_count={state.get('loop_count', 0)}/{state.get('max_loops', 3)}"
             )
-            response = client.chat.completions.create(
-                model=GROQ_MODEL,
-                messages=[
-                    {"role": "system", "content": _SYSTEM_PROMPT},
-                    {"role": "user", "content": summary},
-                ],
-                max_tokens=5,
-                temperature=0,
-            )
-            candidate = response.choices[0].message.content.strip().lower()
-            if candidate in _LINEAR_ORDER:
-                next_agent = candidate
-        except (GroqError, Exception) as exc:  # noqa: BLE001
-            emit_status(
-                job_id, "agent_log",
-                {"agent": "supervisor", "message": f"Groq unavailable ({exc}); using fallback routing"},
-            )
+
+            def _call():
+                return client.chat.completions.create(
+                    model=GROQ_MODEL,
+                    messages=[
+                        {"role": "system", "content": _SYSTEM_PROMPT},
+                        {"role": "user", "content": summary},
+                    ],
+                    max_tokens=5,
+                    temperature=0,
+                )
+
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
+                future = ex.submit(_call)
+                try:
+                    response = future.result(timeout=GROQ_TIMEOUT)
+                    candidate = response.choices[0].message.content.strip().lower()
+                    if candidate in _LINEAR_ORDER:
+                        next_agent = candidate
+                except concurrent.futures.TimeoutError:
+                    emit_status(job_id, "agent_log", {"agent": "supervisor", "message": f"Groq request timed out after {GROQ_TIMEOUT}s; using fallback routing"})
+                    emit_status(job_id, "agent_status", {"agent": "supervisor", "status": "error", "message": "groq_timeout"})
+                except (GroqError, Exception) as exc:  # noqa: BLE001
+                    emit_status(
+                        job_id, "agent_log",
+                        {"agent": "supervisor", "message": f"Groq unavailable ({exc}); using fallback routing"},
+                    )
+                    emit_status(job_id, "agent_status", {"agent": "supervisor", "status": "error", "message": str(exc)})
 
     if next_agent is None:
         next_agent = _fallback_route(state)
