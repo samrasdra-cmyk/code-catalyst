@@ -1,6 +1,9 @@
 import React, { useState } from "react";
 
-const API_URL = process.env.REACT_APP_API_URL || "http://localhost:5000";
+const API_URL = process.env.REACT_APP_API_URL ||
+  (process.env.NODE_ENV === "production"
+    ? window.location.origin
+    : "http://localhost:5000");
 
 const SAMPLE_REPOS = [
   { label: "Express.js", url: "https://github.com/expressjs/express" },

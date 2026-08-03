@@ -3,10 +3,18 @@ services:
     name: codecatalyst-web
     env: docker
     dockerfilePath: Dockerfile
-    startCommand: node backend/src/app.js
+    # Docker services use CMD from the Dockerfile; startCommand is ignored for env:docker
+    dockerBuildArgs:
+      # These REACT_APP_* vars are baked into the React bundle at build time.
+      # Replace the URL below with your actual Render service URL.
+      - REACT_APP_API_URL=https://code-catalyst-loqv.onrender.com
+      - REACT_APP_SOCKET_URL=https://code-catalyst-loqv.onrender.com
+      - REACT_APP_BACKEND_URL=https://code-catalyst-loqv.onrender.com
     envVars:
       - key: NODE_ENV
         value: production
+      - key: PORT
+        value: "10000"
       - key: RABBITMQ_URL
         fromSecret: RABBITMQ_URL
       - key: JOB_QUEUE_NAME
@@ -14,11 +22,11 @@ services:
       - key: STATUS_QUEUE_NAME
         value: codecatalyst_status
       - key: CHROMA_HOST
-        value: chromadb
+        value: localhost
       - key: CHROMA_PORT
         value: "8000"
       - key: FRONTEND_ORIGIN
-        value: "https://codecatalyst-web.onrender.com"   # <-- REPLACE with your actual URL after deployment
+        value: "https://code-catalyst-loqv.onrender.com"
     healthCheckPath: /health
 
   - type: worker
@@ -34,7 +42,7 @@ services:
       - key: STATUS_QUEUE_NAME
         value: codecatalyst_status
       - key: CHROMA_HOST
-        value: chromadb
+        value: localhost
       - key: CHROMA_PORT
         value: "8000"
       - key: GROQ_API_KEY
