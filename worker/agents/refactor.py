@@ -7,12 +7,14 @@ but guaranteed to return *something* runnable.
 """
 
 import os
+import concurrent.futures
 from groq import Groq, GroqError
 
 from core.status import emit_status
 from parsers.ast_analyzer import js_var_to_let_fallback
 
 GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.1-70b-versatile")
+GROQ_TIMEOUT = int(os.getenv("GROQ_TIMEOUT_SECONDS", "30"))
 
 _SYSTEM_PROMPT = (
     "You are a precise code refactoring engine. Rewrite the given source file "
@@ -49,21 +51,31 @@ def run(state: dict) -> dict:
             user_content += f"\n\nThe previous attempt failed review with this feedback:\n{critic_feedback}\nFix it."
 
         try:
-            response = client.chat.completions.create(
-                model=GROQ_MODEL,
-                messages=[
-                    {"role": "system", "content": _SYSTEM_PROMPT},
-                    {"role": "user", "content": user_content},
-                ],
-                max_tokens=2048,
-                temperature=0.2,
-            )
-            refactored = response.choices[0].message.content.strip()
-        except (GroqError, Exception) as exc:  # noqa: BLE001
-            emit_status(
-                job_id, "agent_log",
-                {"agent": "refactor", "message": f"Groq unavailable ({exc}); using AST fallback"},
-            )
+            def _call():
+                return client.chat.completions.create(
+                    model=GROQ_MODEL,
+                    messages=[
+                        {"role": "system", "content": _SYSTEM_PROMPT},
+                        {"role": "user", "content": user_content},
+                    ],
+                    max_tokens=2048,
+                    temperature=0.2,
+                )
+
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
+                future = ex.submit(_call)
+                try:
+                    response = future.result(timeout=GROQ_TIMEOUT)
+                    refactored = response.choices[0].message.content.strip()
+                except concurrent.futures.TimeoutError:
+                    emit_status(job_id, "agent_log", {"agent": "refactor", "message": f"Groq request timed out after {GROQ_TIMEOUT}s; using AST fallback"})
+                    emit_status(job_id, "agent_status", {"agent": "refactor", "status": "error", "message": "groq_timeout"})
+                except (GroqError, Exception) as exc:  # noqa: BLE001
+                    emit_status(
+                        job_id, "agent_log",
+                        {"agent": "refactor", "message": f"Groq unavailable ({exc}); using AST fallback"},
+                    )
+                    emit_status(job_id, "agent_status", {"agent": "refactor", "status": "error", "message": str(exc)})
 
     if refactored is None:
         # Deterministic fallback: only handles var -> let for JS/TS files.
