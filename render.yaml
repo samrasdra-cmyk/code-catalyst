@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: codecatalyst-web
+    name: code-catalyst
     env: docker
     dockerfilePath: Dockerfile
     # Docker services use CMD from the Dockerfile; startCommand is ignored for env:docker
