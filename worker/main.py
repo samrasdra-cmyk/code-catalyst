@@ -73,11 +73,17 @@ def process_job(job: dict):
 def _on_message(channel, method, _properties, body):
     try:
         job = json.loads(body.decode("utf-8"))
+        job_id = job.get("jobId") or job.get("job_id") or "unknown"
+        print(f"[main] picked up job {job_id}, starting pipeline...")
         process_job(job)
+        print(f"[main] finished job {job_id}")
     except Exception as exc:  # noqa: BLE001
         print(f"[main] failed to process message: {exc}")
     finally:
-        channel.basic_ack(delivery_tag=method.delivery_tag)
+        try:
+            channel.basic_ack(delivery_tag=method.delivery_tag)
+        except Exception as exc:  # noqa: BLE001
+            print(f"[main] could not ack message (connection likely dropped during processing): {exc}")
 
 
 import time
@@ -89,6 +95,8 @@ def main():
             params = pika.URLParameters(RABBITMQ_URL)
             params.socket_timeout = 2.0
             params.connection_attempts = 1
+            params.heartbeat = 600
+            params.blocked_connection_timeout = 300
             connection = pika.BlockingConnection(params)
             channel = connection.channel()
             channel.queue_declare(queue=JOB_QUEUE_NAME, durable=True)

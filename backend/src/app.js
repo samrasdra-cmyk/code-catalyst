@@ -45,6 +45,7 @@ function startStatusConsumer() {
   consumeStatusEvents((payload) => {
     const { jobId, event, data } = payload;
     if (!jobId || !event) return;
+    console.log(`[status] job ${jobId}: ${event}`, data || "");
     emitJobEvent(jobId, event, data);
   })
     .then(() => {
