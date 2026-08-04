@@ -93,6 +93,12 @@ def route(state: dict) -> dict:
                         {"agent": "supervisor", "message": f"Groq unavailable ({exc}); using fallback routing"},
                     )
                     emit_status(job_id, "agent_status", {"agent": "supervisor", "status": "error", "message": str(exc)})
+        except Exception as exc:  # noqa: BLE001
+            emit_status(
+                job_id, "agent_log",
+                {"agent": "supervisor", "message": f"Supervisor routing failed ({exc}); using fallback routing"},
+            )
+            emit_status(job_id, "agent_status", {"agent": "supervisor", "status": "error", "message": str(exc)})
 
     if next_agent is None:
         next_agent = _fallback_route(state)
