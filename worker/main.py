@@ -54,13 +54,26 @@ def process_job(job: dict):
                 print(f"[main] indexing failed for job {job_id}: {exc}")
 
         emit_status(
+            job_id,
+            "agent_status",
+            {
+                "agent": "system",
+                "status": "completed",
+                "message": "Pipeline finished successfully",
+                "next": "end",
+                "result": final_state.get("refactored_code", ""),
+            },
+        )
+        emit_status(
             job_id, "job_complete",
             {
+                "status": "completed",
                 "files": final_state.get("files", []),
                 "dependencies": final_state.get("dependencies", {}),
                 "vulnerabilities": final_state.get("vulnerabilities", []),
                 "refactored_code": final_state.get("refactored_code", ""),
                 "critic_feedback": final_state.get("critic_feedback"),
+                "critic_passed": final_state.get("critic_passed", False),
                 "error": final_state.get("error"),
                 "log": final_state.get("log", []),
             },

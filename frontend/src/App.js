@@ -11,6 +11,8 @@ export default function App() {
   const [currentAgent, setCurrentAgent] = useState(null);
   const [agentStatuses, setAgentStatuses] = useState({});
   const [loopCount, setLoopCount] = useState(0);
+  const [jobStatus, setJobStatus] = useState("idle");
+  const [jobResult, setJobResult] = useState(null);
 
   useEffect(() => {
     function onConnect() {
@@ -19,19 +21,35 @@ export default function App() {
     function onDisconnect() {
       setIsConnected(false);
     }
+    function onJobComplete(data) {
+      setJobStatus("completed");
+      setCurrentAgent(null);
+      setJobResult(data);
+    }
+    function onJobError(data) {
+      setJobStatus("error");
+      setCurrentAgent(null);
+      setJobResult(data);
+    }
 
     socket.on("connect", onConnect);
     socket.on("disconnect", onDisconnect);
+    socket.on("job_complete", onJobComplete);
+    socket.on("job_error", onJobError);
 
     return () => {
       socket.off("connect", onConnect);
       socket.off("disconnect", onDisconnect);
+      socket.off("job_complete", onJobComplete);
+      socket.off("job_error", onJobError);
     };
   }, []);
 
   const handleJobStarted = (id, repoUrl, instruction) => {
     setJobId(id);
     setCurrentAgent("supervisor");
+    setJobStatus("running");
+    setJobResult(null);
     setAgentStatuses({
       supervisor: "thinking",
       planner: "idle",
@@ -45,6 +63,7 @@ export default function App() {
   const handleAgentUpdate = useCallback((agent, status, next) => {
     if (agent === "complete" || agent === "error") {
       setCurrentAgent(null);
+      setJobStatus(agent === "complete" ? "completed" : "error");
       return;
     }
 
@@ -59,6 +78,8 @@ export default function App() {
     }
   }, []);
 
+  const isRunning = jobStatus === "running" || Boolean(currentAgent);
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-200 py-10 px-4 sm:px-6 lg:px-8 selection:bg-cyan-500 selection:text-slate-950">
       {/* App Header */}
@@ -67,7 +88,7 @@ export default function App() {
       {/* Main Container */}
       <main className="max-w-6xl mx-auto space-y-6">
         {/* Repository Input Section */}
-        <RepoInput onJobStarted={handleJobStarted} isRunning={Boolean(currentAgent)} />
+        <RepoInput onJobStarted={handleJobStarted} isRunning={isRunning} />
 
         {/* Live LangGraph Visualizer Node Pipeline */}
         <AgentGraph
