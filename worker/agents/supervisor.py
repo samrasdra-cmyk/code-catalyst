@@ -6,7 +6,6 @@ deterministic linear order, so the graph never stalls.
 """
 
 import os
-import traceback
 import concurrent.futures
 from groq import Groq, GroqError
 
@@ -50,18 +49,6 @@ def _fallback_route(state: dict) -> str:
     return "critic"
 
 
-def _report_failure(job_id: str, stage: str, exc: Exception, extra: str | None = None):
-    """Print and emit a clear failure message for the supervisor stage that broke."""
-    detail = f"{stage} failed"
-    if extra:
-        detail = f"{detail}: {extra}"
-    detail = f"{detail}: {exc}"
-    print(f"[supervisor] {detail}")
-    print(traceback.format_exc())
-    emit_status(job_id, "agent_log", {"agent": "supervisor", "message": detail})
-    emit_status(job_id, "agent_status", {"agent": "supervisor", "status": "error", "message": detail})
-
-
 def route(state: dict) -> dict:
     job_id = state["job_id"]
     emit_status(job_id, "agent_status", {"agent": "supervisor", "status": "thinking"})
@@ -69,7 +56,6 @@ def route(state: dict) -> dict:
     client = _client_or_none()
     next_agent = None
 
-    # Only try Groq if we have a client
     if client is not None:
         try:
             summary = (
@@ -99,18 +85,21 @@ def route(state: dict) -> dict:
                     if candidate in _LINEAR_ORDER:
                         next_agent = candidate
                 except concurrent.futures.TimeoutError:
-                    _report_failure(
-                        job_id,
-                        "groq_request",
-                        RuntimeError(f"Groq request timed out after {GROQ_TIMEOUT}s"),
-                        "using fallback routing",
-                    )
+                    emit_status(job_id, "agent_log", {"agent": "supervisor", "message": f"Groq request timed out after {GROQ_TIMEOUT}s; using fallback routing"})
+                    emit_status(job_id, "agent_status", {"agent": "supervisor", "status": "error", "message": "groq_timeout"})
                 except (GroqError, Exception) as exc:
-                    _report_failure(job_id, "groq_request", exc, "using fallback routing")
+                    emit_status(
+                        job_id, "agent_log",
+                        {"agent": "supervisor", "message": f"Groq unavailable ({exc}); using fallback routing"},
+                    )
+                    emit_status(job_id, "agent_status", {"agent": "supervisor", "status": "error", "message": str(exc)})
         except Exception as exc:
-            _report_failure(job_id, "supervisor_routing", exc, "using fallback routing")
+            emit_status(
+                job_id, "agent_log",
+                {"agent": "supervisor", "message": f"Supervisor routing failed ({exc}); using fallback routing"},
+            )
+            emit_status(job_id, "agent_status", {"agent": "supervisor", "status": "error", "message": str(exc)})
 
-    # If Groq didn't give us a valid agent, use fallback
     if next_agent is None:
         next_agent = _fallback_route(state)
 
