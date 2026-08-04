@@ -67,6 +67,12 @@ export default function App() {
       return;
     }
 
+    if (agent === "supervisor" && status === "done" && next === "end") {
+      setCurrentAgent(null);
+      setJobStatus("completed");
+      return;
+    }
+
     setCurrentAgent(agent);
     setAgentStatuses((prev) => ({
       ...prev,
