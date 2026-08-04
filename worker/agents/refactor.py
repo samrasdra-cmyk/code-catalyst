@@ -76,6 +76,12 @@ def run(state: dict) -> dict:
                         {"agent": "refactor", "message": f"Groq unavailable ({exc}); using AST fallback"},
                     )
                     emit_status(job_id, "agent_status", {"agent": "refactor", "status": "error", "message": str(exc)})
+        except Exception as exc:  # noqa: BLE001
+            emit_status(
+                job_id, "agent_log",
+                {"agent": "refactor", "message": f"Refactor request failed ({exc}); using AST fallback"},
+            )
+            emit_status(job_id, "agent_status", {"agent": "refactor", "status": "error", "message": str(exc)})
 
     if refactored is None:
         # Deterministic fallback: only handles var -> let for JS/TS files.
