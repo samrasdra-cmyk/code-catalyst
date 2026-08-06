@@ -11,8 +11,8 @@ Critic can send the graph back to Refactor up to `max_loops` times.
 
 from langgraph.graph import StateGraph, END
 
-from core.state import CatalystState
-from agents import supervisor, planner, security, refactor, critic
+from worker.core.state import CatalystState
+from worker.agents import supervisor, planner, security, refactor, critic
 
 
 def _supervisor_router(state: CatalystState) -> str:

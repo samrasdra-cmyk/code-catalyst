@@ -73,9 +73,8 @@ def index_repo(local_path: str) -> Tuple[int, int]:
     files_indexed = 0
     chunks_indexed = 0
 
-    for root, _dirs, filenames in os.walk(local_path):
-        if "/.git" in root or "node_modules" in root:
-            continue
+    for root, dirs, filenames in os.walk(local_path):
+        dirs[:] = [d for d in dirs if d not in (".git", "node_modules", "venv", "__pycache__")]
         for filename in filenames:
             if not filename.endswith(SUPPORTED_EXTENSIONS):
                 continue

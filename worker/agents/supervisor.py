@@ -9,7 +9,7 @@ import os
 import concurrent.futures
 from groq import Groq, GroqError
 
-from core.status import emit_status
+from worker.core.status import emit_status
 
 GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.1-70b-versatile")
 GROQ_TIMEOUT = int(os.getenv("GROQ_TIMEOUT_SECONDS", "30"))

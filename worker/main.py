@@ -9,17 +9,26 @@ Run with:  python main.py
 
 import json
 import os
+import sys
 import traceback
+
+import concurrent.futures
+
 
 import pika
 from dotenv import load_dotenv
 
+# Allow `python main.py` from the worker/ folder by adding the repo root
+ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if ROOT_DIR not in sys.path:
+    sys.path.insert(0, ROOT_DIR)
+
 load_dotenv()
 
-from core.graph import build_graph
-from core.state import new_state
-from core.status import emit_status
-from rag.indexer import index_repo
+from worker.core.graph import build_graph
+from worker.core.state import new_state
+from worker.core.status import emit_status
+from worker.rag.indexer import index_repo
 
 RABBITMQ_URL = os.getenv("RABBITMQ_URL", "amqp://guest:guest@localhost:5672")
 JOB_QUEUE_NAME = os.getenv("JOB_QUEUE_NAME", "codecatalyst_jobs")
@@ -27,6 +36,7 @@ MAX_LOOPS = int(os.getenv("MAX_LOOPS", "3"))
 
 _graph = build_graph()
 
+# ...
 
 def process_job(job: dict):
     job_id = job["jobId"]
@@ -39,50 +49,51 @@ def process_job(job: dict):
 
     try:
         final_state = _graph.invoke(state)
+    except Exception as exc:  # noqa: BLE001
+        traceback.print_exc()
+        emit_status(job_id, "job_error", {"message": str(exc)})
+        return
 
-        # Best-effort RAG indexing of the whole repo, now that we know
-        # local_path. Never blocks job completion if it fails.
-        local_path = final_state.get("local_path")
-        if local_path:
-            try:
-                files_indexed, chunks_indexed = index_repo(local_path)
+    # Tell the frontend the pipeline is done FIRST, before any
+    # best-effort extra work that could stall or fail.
+    emit_status(
+        job_id, "agent_status",
+        {
+            "agent": "system", "status": "completed",
+            "message": "Pipeline finished successfully",
+            "next": "end",
+            "result": final_state.get("refactored_code", ""),
+        },
+    )
+    emit_status(
+        job_id, "job_complete",
+        {
+            "status": "completed",
+            "files": final_state.get("files", []),
+            "dependencies": final_state.get("dependencies", {}),
+            "vulnerabilities": final_state.get("vulnerabilities", []),
+            "refactored_code": final_state.get("refactored_code", ""),
+            "critic_feedback": final_state.get("critic_feedback"),
+            "critic_passed": final_state.get("critic_passed", False),
+            "error": final_state.get("error"),
+            "log": final_state.get("log", []),
+        },
+    )
+
+    local_path = final_state.get("local_path")
+    if local_path:
+        try:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
+                future = ex.submit(index_repo, local_path)
+                files_indexed, chunks_indexed = future.result(timeout=60)
                 emit_status(
                     job_id, "agent_log",
                     {"agent": "system", "message": f"Indexed {chunks_indexed} chunks from {files_indexed} files into ChromaDB"},
                 )
-            except Exception as exc:  # noqa: BLE001
-                print(f"[main] indexing failed for job {job_id}: {exc}")
-
-        emit_status(
-            job_id,
-            "agent_status",
-            {
-                "agent": "system",
-                "status": "completed",
-                "message": "Pipeline finished successfully",
-                "next": "end",
-                "result": final_state.get("refactored_code", ""),
-            },
-        )
-        emit_status(
-            job_id, "job_complete",
-            {
-                "status": "completed",
-                "files": final_state.get("files", []),
-                "dependencies": final_state.get("dependencies", {}),
-                "vulnerabilities": final_state.get("vulnerabilities", []),
-                "refactored_code": final_state.get("refactored_code", ""),
-                "critic_feedback": final_state.get("critic_feedback"),
-                "critic_passed": final_state.get("critic_passed", False),
-                "error": final_state.get("error"),
-                "log": final_state.get("log", []),
-            },
-        )
-    except Exception as exc:  # noqa: BLE001
-        traceback.print_exc()
-        emit_status(job_id, "job_error", {"message": str(exc)})
-
-
+        except concurrent.futures.TimeoutError:
+            print(f"[main] indexing timed out for job {job_id}, skipping")
+        except Exception as exc:  # noqa: BLE001
+            print(f"[main] indexing failed for job {job_id}: {exc}")
 def _on_message(channel, method, _properties, body):
     try:
         job = json.loads(body.decode("utf-8"))

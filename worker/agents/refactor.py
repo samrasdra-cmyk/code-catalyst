@@ -10,8 +10,8 @@ import os
 import concurrent.futures
 from groq import Groq, GroqError
 
-from core.status import emit_status
-from parsers.ast_analyzer import js_var_to_let_fallback
+from worker.core.status import emit_status
+from worker.parsers.ast_analyzer import js_var_to_let_fallback
 
 GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.1-70b-versatile")
 GROQ_TIMEOUT = int(os.getenv("GROQ_TIMEOUT_SECONDS", "30"))

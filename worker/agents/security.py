@@ -6,9 +6,9 @@ ChromaDB is unreachable, since chroma_client.py degrades to an
 in-memory client and the regex/AST layer never depends on it at all.
 """
 
-from core.status import emit_status
-from rag.chroma_client import get_cve_collection
-from parsers.ast_analyzer import scan_python_vulnerabilities, scan_js_vulnerabilities
+from worker.core.status import emit_status
+from worker.rag.chroma_client import get_cve_collection
+from worker.parsers.ast_analyzer import scan_python_vulnerabilities, scan_js_vulnerabilities
 
 
 def _rag_similarity_check(code: str, distance_threshold: float = 0.9) -> list:

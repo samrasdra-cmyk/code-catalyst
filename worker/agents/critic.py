@@ -11,8 +11,8 @@ import subprocess
 import tempfile
 import os
 
-from core.status import emit_status
-from parsers.ast_analyzer import validate_python_syntax
+from worker.core.status import emit_status
+from worker.parsers.ast_analyzer import validate_python_syntax
 
 
 def _run_pylint(code: str) -> str | None:

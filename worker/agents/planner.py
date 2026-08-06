@@ -13,8 +13,8 @@ import tempfile
 
 import git
 
-from core.status import emit_status
-from parsers.ast_analyzer import SUPPORTED_EXTENSIONS as _  # noqa: F401 (re-export not needed, kept for clarity)
+from worker.core.status import emit_status
+from worker.parsers.ast_analyzer import SUPPORTED_EXTENSIONS as _  # noqa: F401 (re-export not needed, kept for clarity)
 
 _CODE_EXTENSIONS = (".py", ".js", ".ts", ".jsx", ".tsx")
 
