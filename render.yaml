@@ -22,30 +22,34 @@ services:
       - key: STATUS_QUEUE_NAME
         value: codecatalyst_status
       - key: CHROMA_HOST
-        value: localhost
+        value: chromadb
       - key: CHROMA_PORT
         value: "8000"
       - key: FRONTEND_ORIGIN
         value: "https://code-catalyst-loqv.onrender.com"
     healthCheckPath: /health
 
-  - type: worker
-    name: codecatalyst-worker
+  - type: web
+    name: codecatalyst-rabbitmq
     env: docker
-    dockerfilePath: Dockerfile
-    startCommand: python worker/main.py
+    image: rabbitmq:3-management
     envVars:
-      - key: RABBITMQ_URL
-        fromSecret: RABBITMQ_URL
-      - key: JOB_QUEUE_NAME
-        value: codecatalyst_jobs
-      - key: STATUS_QUEUE_NAME
-        value: codecatalyst_status
-      - key: CHROMA_HOST
-        value: localhost
-      - key: CHROMA_PORT
+      - key: RABBITMQ_DEFAULT_USER
+        value: guest
+      - key: RABBITMQ_DEFAULT_PASS
+        value: guest
+    ports:
+      - port: 5672
+      - port: 15672
+
+  - type: web
+    name: codecatalyst-chromadb
+    env: docker
+    image: chromadb/chroma:latest
+    envVars:
+      - key: CHROMA_SERVER_HOST
+        value: 0.0.0.0
+      - key: CHROMA_SERVER_PORT
         value: "8000"
-      - key: GROQ_API_KEY
-        fromSecret: GROQ_API_KEY
-      - key: GROQ_MODEL
-        value: llama-3.1-70b-versatile
+    ports:
+      - port: 8000
