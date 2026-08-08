@@ -37,6 +37,18 @@ if (fs.existsSync(path.join(staticPath, "index.html"))) {
 const server = http.createServer(app);
 initSocket(server, process.env.NODE_ENV === "production" ? "*" : FRONTEND_ORIGIN);
 
+process.on("uncaughtException", (err) => {
+  console.error("[app] uncaughtException:", err);
+  process.exit(1);
+});
+
+process.on("unhandledRejection", (reason, promise) => {
+  console.error("[app] unhandledRejection:", reason);
+  if (promise) {
+    console.error("[app] rejected promise:", promise);
+  }
+});
+
 // Bridge: every status event the Python worker drops on RabbitMQ gets
 // forwarded straight into the browser room for that job.
 let _retryDelay = 2000;

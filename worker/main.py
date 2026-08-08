@@ -33,6 +33,7 @@ from worker.rag.indexer import index_repo
 RABBITMQ_URL = os.getenv("RABBITMQ_URL", "amqp://guest:guest@localhost:5672")
 JOB_QUEUE_NAME = os.getenv("JOB_QUEUE_NAME", "codecatalyst_jobs")
 MAX_LOOPS = int(os.getenv("MAX_LOOPS", "3"))
+ENABLE_RAG_INDEXING = os.getenv("ENABLE_RAG_INDEXING", "true").lower() == "true"
 
 _graph = build_graph()
 
@@ -81,7 +82,7 @@ def process_job(job: dict):
     )
 
     local_path = final_state.get("local_path")
-    if local_path:
+    if local_path and ENABLE_RAG_INDEXING:
         try:
             with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
                 future = ex.submit(index_repo, local_path)
@@ -94,6 +95,8 @@ def process_job(job: dict):
             print(f"[main] indexing timed out for job {job_id}, skipping")
         except Exception as exc:  # noqa: BLE001
             print(f"[main] indexing failed for job {job_id}: {exc}")
+    elif local_path:
+        print(f"[main] ENABLE_RAG_INDEXING=false, skipping ChromaDB indexing for job {job_id}")
 def _on_message(channel, method, _properties, body):
     try:
         job = json.loads(body.decode("utf-8"))
