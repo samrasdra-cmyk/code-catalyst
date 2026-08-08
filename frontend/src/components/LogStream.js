@@ -23,7 +23,12 @@ export default function LogStream({ jobId, onAgentUpdate }) {
   useEffect(() => {
     if (!jobId) return;
 
-    socket.emit("join_job", jobId);
+    const joinJobRoom = () => {
+      socket.emit("join_job", jobId);
+    };
+
+    joinJobRoom();
+    socket.on("connect", joinJobRoom);
 
     function appendLine(agent, text, type = "status") {
       setLines((prev) => [
@@ -75,6 +80,7 @@ export default function LogStream({ jobId, onAgentUpdate }) {
       socket.off("agent_log", onAgentLog);
       socket.off("job_complete", onJobComplete);
       socket.off("job_error", onJobError);
+      socket.off("connect", joinJobRoom);
     };
   }, [jobId, onAgentUpdate]);
 
@@ -90,7 +96,7 @@ export default function LogStream({ jobId, onAgentUpdate }) {
 
   const copyToClipboard = (text, setCopiedState) => {
     navigator.clipboard.writeText(text);
-    setCopiedState(True => true);
+    setCopiedState(true);
     setTimeout(() => setCopiedState(false), 2000);
   };
 

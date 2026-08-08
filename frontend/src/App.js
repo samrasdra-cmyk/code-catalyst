@@ -45,6 +45,18 @@ export default function App() {
     };
   }, []);
 
+  useEffect(() => {
+    if (!jobId) return;
+
+    const joinJobRoom = () => socket.emit("join_job", jobId);
+    joinJobRoom();
+    socket.on("connect", joinJobRoom);
+
+    return () => {
+      socket.off("connect", joinJobRoom);
+    };
+  }, [jobId]);
+
   const handleJobStarted = (id, repoUrl, instruction) => {
     setJobId(id);
     setCurrentAgent("supervisor");

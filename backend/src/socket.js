@@ -1,6 +1,42 @@
 const { Server } = require("socket.io");
 
 let io = null;
+const JOB_EVENT_TTL_MS = 10 * 60 * 1000;
+const MAX_BUFFERED_EVENTS = 200;
+const jobEventBuffer = new Map();
+
+function bufferJobEvent(jobId, eventName, payload) {
+  if (!jobId) return;
+
+  const now = Date.now();
+  const entry = jobEventBuffer.get(jobId) || {
+    events: [],
+    cleanupTimer: null,
+  };
+
+  entry.events.push({ eventName, payload, timestamp: now });
+  if (entry.events.length > MAX_BUFFERED_EVENTS) {
+    entry.events.shift();
+  }
+
+  if (entry.cleanupTimer) {
+    clearTimeout(entry.cleanupTimer);
+  }
+  entry.cleanupTimer = setTimeout(() => {
+    jobEventBuffer.delete(jobId);
+  }, JOB_EVENT_TTL_MS);
+
+  jobEventBuffer.set(jobId, entry);
+}
+
+function replayBufferedEvents(socket, jobId) {
+  const entry = jobEventBuffer.get(jobId);
+  if (!entry || entry.events.length === 0) return;
+
+  entry.events.forEach(({ eventName, payload }) => {
+    socket.emit(eventName, payload);
+  });
+}
 
 /**
  * Initialize the Socket.IO server on top of an existing HTTP server.
@@ -21,6 +57,7 @@ function initSocket(httpServer, frontendOrigin) {
     socket.on("join_job", (jobId) => {
       socket.join(jobId);
       console.log(`[socket] ${socket.id} joined room ${jobId}`);
+      replayBufferedEvents(socket, jobId);
     });
 
     socket.on("disconnect", () => {
@@ -38,6 +75,7 @@ function initSocket(httpServer, frontendOrigin) {
  */
 function emitJobEvent(jobId, eventName, payload) {
   if (!io) return;
+  bufferJobEvent(jobId, eventName, payload);
   io.to(jobId).emit(eventName, payload);
 }
 
