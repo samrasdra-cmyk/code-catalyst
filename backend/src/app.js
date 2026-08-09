@@ -79,13 +79,17 @@ function startStatusConsumer() {
 }
 
 async function start() {
-  await initQueueMode();
-  startStatusConsumer();
-
   server.listen(PORT, HOST, () => {
     console.log(`CodeCatalyst backend listening on http://${HOST}:${PORT}`);
     console.log(`[app] Queue mode: ${getQueueStatus().mode}`);
   });
+
+  try {
+    await initQueueMode();
+    startStatusConsumer();
+  } catch (err) {
+    console.error("[app] Queue initialization warning:", err.message);
+  }
 }
 
 start();
