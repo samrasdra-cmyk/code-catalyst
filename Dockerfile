@@ -11,6 +11,10 @@ ENV PYTHONUNBUFFERED=1
 ENV PORT=10000
 ENV HOST=0.0.0.0
 
+# Prevent React build from freezing/OOM on Render's 512MB build server
+ENV GENERATE_SOURCEMAP=false
+ENV DISABLE_ESLINT_PLUGIN=true
+
 # Install Python 3, Pip, and Git for the inline worker
 RUN apt-get update && apt-get install -y \
     python3 \
@@ -30,7 +34,7 @@ RUN cd backend && npm install --omit=dev
 # Copy application source
 COPY . .
 
-# Build React frontend
+# Build React frontend with sourcemaps disabled for 5x faster compilation
 RUN cd frontend && npm install && npm run build
 
 # Copy React build to backend public folder for static serving
