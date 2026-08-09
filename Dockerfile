@@ -25,7 +25,7 @@ RUN apt-get update && apt-get install -y \
 
 # Install lightweight Python dependencies
 COPY worker/requirements.render.txt worker/
-RUN pip3 install --no-cache-dir -r worker/requirements.render.txt
+RUN pip3 install --no-cache-dir --break-system-packages -r worker/requirements.render.txt
 
 # Install backend dependencies
 COPY backend/package*.json backend/

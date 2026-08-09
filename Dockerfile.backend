@@ -17,7 +17,7 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 COPY worker/requirements.render.txt worker/
-RUN pip3 install --no-cache-dir -r worker/requirements.render.txt
+RUN pip3 install --no-cache-dir --break-system-packages -r worker/requirements.render.txt
 
 COPY backend/package*.json backend/
 RUN cd backend && npm install --omit=dev
