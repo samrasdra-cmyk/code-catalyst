@@ -1,3 +1,5 @@
+# Legacy monolith: backend + worker + frontend in one container.
+# Prefer render.yaml (split services) for Render deployment.
 FROM python:3.10-slim
 
 WORKDIR /app

@@ -1,0 +1,13 @@
+FROM python:3.10-slim
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*
+
+COPY worker/requirements.txt worker/
+RUN pip install --no-cache-dir -r worker/requirements.txt
+
+COPY worker/ worker/
+
+WORKDIR /app/worker
+CMD ["python", "main.py"]

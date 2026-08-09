@@ -1,35 +1,17 @@
-services:
-  - type: web
-    name: code-catalyst
-    env: docker
-    dockerfilePath: Dockerfile
-    # Docker services use CMD from the Dockerfile; startCommand is ignored for env:docker
-    dockerBuildArgs:
-      # These REACT_APP_* vars are baked into the React bundle at build time.
-      # Replace the URL below with your actual Render service URL.
-      - REACT_APP_API_URL=https://code-catalyst-loqv.onrender.com
-      - REACT_APP_SOCKET_URL=https://code-catalyst-loqv.onrender.com
-      - REACT_APP_BACKEND_URL=https://code-catalyst-loqv.onrender.com
-    envVars:
-      - key: NODE_ENV
-        value: production
-      - key: PORT
-        value: "10000"
-      - key: RABBITMQ_URL
-        fromSecret: RABBITMQ_URL
-      - key: JOB_QUEUE_NAME
-        value: codecatalyst_jobs
-      - key: STATUS_QUEUE_NAME
-        value: codecatalyst_status
-      - key: CHROMA_HOST
-        value: chromadb
-      - key: CHROMA_PORT
-        value: "8000"
-      - key: FRONTEND_ORIGIN
-        value: "https://code-catalyst-loqv.onrender.com"
-    healthCheckPath: /health
+# CodeCatalyst on Render — split services (recommended)
+#
+# Deploy: connect this repo in Render → New Blueprint → paste this file.
+# After deploy, set GROQ_API_KEY on the worker service (Dashboard → Environment).
+#
+# Services:
+#   code-catalyst-frontend  Static React site
+#   code-catalyst-backend   Express + Socket.IO API
+#   code-catalyst-worker    Python LangGraph worker (background)
+#   codecatalyst-rabbitmq   Private RabbitMQ (internal only)
 
-  - type: web
+services:
+  # ── RabbitMQ (private — not reachable from the public internet) ───────────
+  - type: pserv
     name: codecatalyst-rabbitmq
     env: docker
     image: rabbitmq:3-management
@@ -38,18 +20,72 @@ services:
         value: guest
       - key: RABBITMQ_DEFAULT_PASS
         value: guest
-    ports:
-      - port: 5672
-      - port: 15672
 
+  # ── Backend API + Socket.IO ───────────────────────────────────────────────
   - type: web
-    name: codecatalyst-chromadb
-    env: docker
-    image: chromadb/chroma:latest
+    name: code-catalyst-backend
+    runtime: node
+    rootDir: backend
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /health
     envVars:
-      - key: CHROMA_SERVER_HOST
-        value: 0.0.0.0
-      - key: CHROMA_SERVER_PORT
-        value: "8000"
-    ports:
-      - port: 8000
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: "10000"
+      - key: FRONTEND_ORIGIN
+        fromService:
+          type: web
+          name: code-catalyst-frontend
+          envVarKey: RENDER_EXTERNAL_URL
+      - key: RABBITMQ_URL
+        value: amqp://guest:guest@codecatalyst-rabbitmq:5672
+      - key: JOB_QUEUE_NAME
+        value: codecatalyst_jobs
+      - key: STATUS_QUEUE_NAME
+        value: codecatalyst_status
+
+  # ── Python worker (consumes RabbitMQ jobs) ─────────────────────────────────
+  - type: worker
+    name: code-catalyst-worker
+    runtime: python
+    rootDir: .
+    buildCommand: pip install -r worker/requirements.txt
+    startCommand: python worker/main.py
+    envVars:
+      - key: RABBITMQ_URL
+        value: amqp://guest:guest@codecatalyst-rabbitmq:5672
+      - key: JOB_QUEUE_NAME
+        value: codecatalyst_jobs
+      - key: STATUS_QUEUE_NAME
+        value: codecatalyst_status
+      # ChromaDB is optional; worker falls back to in-memory RAG without it
+      - key: ENABLE_RAG_INDEXING
+        value: "false"
+      - key: GROQ_API_KEY
+        sync: false
+
+  # ── React frontend (static site) ────────────────────────────────────────────
+  - type: web
+    name: code-catalyst-frontend
+    runtime: static
+    rootDir: frontend
+    buildCommand: npm install && npm run build
+    staticPublishPath: build
+    envVars:
+      - key: REACT_APP_API_URL
+        fromService:
+          type: web
+          name: code-catalyst-backend
+          envVarKey: RENDER_EXTERNAL_URL
+      - key: REACT_APP_SOCKET_URL
+        fromService:
+          type: web
+          name: code-catalyst-backend
+          envVarKey: RENDER_EXTERNAL_URL
+      - key: REACT_APP_BACKEND_URL
+        fromService:
+          type: web
+          name: code-catalyst-backend
+          envVarKey: RENDER_EXTERNAL_URL
