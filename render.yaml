@@ -1,68 +1,35 @@
-# CodeCatalyst on Render — split services (recommended)
+# CodeCatalyst on Render
 #
-# Deploy: connect this repo in Render → New Blueprint → paste this file.
-# After deploy, set GROQ_API_KEY on the worker service (Dashboard → Environment).
+# Free-tier friendly: backend runs the Python worker inline (no RabbitMQ needed).
+# Frontend is a separate static site that talks to the backend API + Socket.IO.
 #
-# Services:
-#   code-catalyst-frontend  Static React site
-#   code-catalyst-backend   Express + Socket.IO API
-#   code-catalyst-worker    Python LangGraph worker (background)
-#   codecatalyst-rabbitmq   Private RabbitMQ (internal only)
+# After deploy, optionally set GROQ_API_KEY on the backend service for better AI output.
 
 services:
-  # ── RabbitMQ (private — not reachable from the public internet) ───────────
-  - type: pserv
-    name: codecatalyst-rabbitmq
-    env: docker
-    image: rabbitmq:3-management
-    envVars:
-      - key: RABBITMQ_DEFAULT_USER
-        value: guest
-      - key: RABBITMQ_DEFAULT_PASS
-        value: guest
-
-  # ── Backend API + Socket.IO ───────────────────────────────────────────────
+  # ── Backend API + inline Python worker ────────────────────────────────────
   - type: web
     name: code-catalyst-backend
-    runtime: node
-    rootDir: backend
-    buildCommand: npm install
-    startCommand: npm start
+    env: docker
+    dockerfilePath: Dockerfile.backend
     healthCheckPath: /health
     envVars:
       - key: NODE_ENV
         value: production
       - key: PORT
         value: "10000"
+      - key: HOST
+        value: 0.0.0.0
+      - key: QUEUE_MODE
+        value: inline
+      - key: ENABLE_RAG_INDEXING
+        value: "false"
+      - key: PYTHON_BIN
+        value: python3
       - key: FRONTEND_ORIGIN
         fromService:
           type: web
           name: code-catalyst-frontend
           envVarKey: RENDER_EXTERNAL_URL
-      - key: RABBITMQ_URL
-        value: amqp://guest:guest@codecatalyst-rabbitmq:5672
-      - key: JOB_QUEUE_NAME
-        value: codecatalyst_jobs
-      - key: STATUS_QUEUE_NAME
-        value: codecatalyst_status
-
-  # ── Python worker (consumes RabbitMQ jobs) ─────────────────────────────────
-  - type: worker
-    name: code-catalyst-worker
-    runtime: python
-    rootDir: .
-    buildCommand: pip install -r worker/requirements.txt
-    startCommand: python worker/main.py
-    envVars:
-      - key: RABBITMQ_URL
-        value: amqp://guest:guest@codecatalyst-rabbitmq:5672
-      - key: JOB_QUEUE_NAME
-        value: codecatalyst_jobs
-      - key: STATUS_QUEUE_NAME
-        value: codecatalyst_status
-      # ChromaDB is optional; worker falls back to in-memory RAG without it
-      - key: ENABLE_RAG_INDEXING
-        value: "false"
       - key: GROQ_API_KEY
         sync: false
 
@@ -89,3 +56,27 @@ services:
           type: web
           name: code-catalyst-backend
           envVarKey: RENDER_EXTERNAL_URL
+
+  # ── Optional: RabbitMQ + separate worker (paid Render plans) ───────────────
+  # Uncomment these three services if you want distributed queue processing.
+  #
+  # - type: pserv
+  #   name: codecatalyst-rabbitmq
+  #   env: docker
+  #   image: rabbitmq:3-management
+  #   envVars:
+  #     - key: RABBITMQ_ERLANG_COOKIE
+  #       generateValue: true
+  #     - key: RABBITMQ_DEFAULT_USER
+  #       value: guest
+  #     - key: RABBITMQ_DEFAULT_PASS
+  #       generateValue: true
+  #   disk:
+  #     name: rabbitmq-data
+  #     mountPath: /var/lib/rabbitmq
+  #     sizeGB: 1
+  #
+  # Then set on backend + worker:
+  #   QUEUE_MODE=rabbitmq
+  #   RABBITMQ_HOST fromService codecatalyst-rabbitmq property host
+  #   RABBITMQ_PORT=5672

@@ -2,12 +2,30 @@ FROM node:18-slim
 
 WORKDIR /app
 
-COPY backend/package*.json ./
-RUN npm install --omit=dev
-
-COPY backend/ ./
-
+ENV DEBIAN_FRONTEND=noninteractive
 ENV NODE_ENV=production
+ENV QUEUE_MODE=inline
+ENV ENABLE_RAG_INDEXING=false
+ENV PYTHONUNBUFFERED=1
+
+# Node backend + inline Python worker (no RabbitMQ required on Render free tier)
+RUN apt-get update && apt-get install -y \
+    python3 \
+    python3-pip \
+    python3-venv \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY worker/requirements.render.txt worker/
+RUN pip3 install --no-cache-dir -r worker/requirements.render.txt
+
+COPY backend/package*.json backend/
+RUN cd backend && npm install --omit=dev
+
+COPY backend/ backend/
+COPY worker/ worker/
+
+WORKDIR /app/backend
 EXPOSE 10000
 
 CMD ["node", "src/app.js"]

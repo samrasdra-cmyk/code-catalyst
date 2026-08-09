@@ -6,20 +6,26 @@ const fs = require("fs");
 
 const path = require("path");
 const { initSocket, emitJobEvent } = require("./socket");
-const { consumeStatusEvents } = require("./queue/producer");
+const { consumeStatusEvents, initQueueMode, getQueueStatus } = require("./queue/producer");
 const repoRoutes = require("./routes/repo");
+const internalRoutes = require("./routes/internal");
 
 const PORT = process.env.PORT || 5000;
+const HOST = process.env.HOST || "0.0.0.0";
 const FRONTEND_ORIGIN = process.env.FRONTEND_ORIGIN || "http://localhost:3000";
 
 const app = express();
+app.set("trust proxy", 1);
 app.use(cors({ origin: process.env.NODE_ENV === "production" ? true : FRONTEND_ORIGIN }));
 app.use(express.json());
 
-app.get("/health", (_req, res) => res.json({ status: "ok" }));
+app.get("/health", (_req, res) => {
+  res.json({ status: "ok", queue: getQueueStatus() });
+});
+app.use("/internal", internalRoutes);
 app.use("/api/repo", repoRoutes);
 
-// --- Serve React Frontend (Production) ---
+// --- Serve React Frontend (Production monolith only) ---
 const frontendBuildPath = path.join(__dirname, "../../frontend/build");
 const backendPublicPath = path.join(__dirname, "../public");
 const staticPath = fs.existsSync(frontendBuildPath) ? frontendBuildPath : backendPublicPath;
@@ -27,7 +33,7 @@ const staticPath = fs.existsSync(frontendBuildPath) ? frontendBuildPath : backen
 if (fs.existsSync(path.join(staticPath, "index.html"))) {
   app.use(express.static(staticPath));
   app.get("*", (req, res) => {
-    if (req.path.startsWith("/api")) {
+    if (req.path.startsWith("/api") || req.path.startsWith("/internal")) {
       return res.status(404).json({ error: "Not found" });
     }
     res.sendFile(path.join(staticPath, "index.html"));
@@ -49,8 +55,6 @@ process.on("unhandledRejection", (reason, promise) => {
   }
 });
 
-// Bridge: every status event the Python worker drops on RabbitMQ gets
-// forwarded straight into the browser room for that job.
 let _retryDelay = 2000;
 
 function startStatusConsumer() {
@@ -61,22 +65,27 @@ function startStatusConsumer() {
     emitJobEvent(jobId, event, data);
   })
     .then(() => {
-      _retryDelay = 2000; // reset backoff on success
+      _retryDelay = 2000;
     })
     .catch((err) => {
       console.error(
         `[app] Status consumer failed (${err.message}). Retrying in ${_retryDelay / 1000}s...`
       );
       setTimeout(() => {
-        _retryDelay = Math.min(_retryDelay * 2, 30000); // cap at 30s
+        _retryDelay = Math.min(_retryDelay * 2, 30000);
         startStatusConsumer();
       }, _retryDelay);
     });
 }
 
+async function start() {
+  await initQueueMode();
+  startStatusConsumer();
 
-startStatusConsumer();
+  server.listen(PORT, HOST, () => {
+    console.log(`CodeCatalyst backend listening on http://${HOST}:${PORT}`);
+    console.log(`[app] Queue mode: ${getQueueStatus().mode}`);
+  });
+}
 
-server.listen(PORT, () => {
-  console.log(`CodeCatalyst backend listening on http://localhost:${PORT}`);
-});
+start();

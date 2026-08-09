@@ -1,43 +1,42 @@
-# Legacy monolith: backend + worker + frontend in one container.
-# Prefer render.yaml (split services) for Render deployment.
-FROM python:3.10-slim
+# CodeCatalyst Render / Single-Container Production Dockerfile
+FROM node:18-slim
 
 WORKDIR /app
 
 ENV DEBIAN_FRONTEND=noninteractive
+ENV NODE_ENV=production
+ENV QUEUE_MODE=inline
+ENV ENABLE_RAG_INDEXING=false
+ENV PYTHONUNBUFFERED=1
+ENV PORT=10000
+ENV HOST=0.0.0.0
 
-# Install Node for frontend build, and supervisor to run backend+worker together
+# Install Python 3, Pip, and Git for the inline worker
 RUN apt-get update && apt-get install -y \
-    nodejs \
-    npm \
+    python3 \
+    python3-pip \
+    python3-venv \
     git \
-    supervisor \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy and install Python dependencies for the worker
-COPY worker/requirements.txt worker/
-RUN pip install --no-cache-dir -r worker/requirements.txt
+# Install lightweight Python dependencies
+COPY worker/requirements.render.txt worker/
+RUN pip3 install --no-cache-dir -r worker/requirements.render.txt
 
-# Copy and install Node dependencies for the backend
+# Install backend dependencies
 COPY backend/package*.json backend/
-RUN cd backend && npm install
+RUN cd backend && npm install --omit=dev
 
-# Copy the rest of the application code
+# Copy application source
 COPY . .
 
-# Accept Render's env vars as build args so Create React App can bake them in
-ARG REACT_APP_API_URL
-ARG REACT_APP_BACKEND_URL
-ARG REACT_APP_SOCKET_URL
-ENV REACT_APP_API_URL=$REACT_APP_API_URL
-ENV REACT_APP_BACKEND_URL=$REACT_APP_BACKEND_URL
-ENV REACT_APP_SOCKET_URL=$REACT_APP_SOCKET_URL
-
-# Build the React frontend
+# Build React frontend
 RUN cd frontend && npm install && npm run build
 
-# Copy the frontend build into the backend static assets
+# Copy React build to backend public folder for static serving
 RUN mkdir -p backend/public && cp -r frontend/build/* backend/public/
 
-# Run backend + worker together in this single (free) web service via supervisord
-CMD ["supervisord", "-c", "/app/supervisord.conf"]
+WORKDIR /app/backend
+EXPOSE 10000
+
+CMD ["node", "src/app.js"]

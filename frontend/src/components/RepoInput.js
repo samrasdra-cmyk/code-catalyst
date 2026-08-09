@@ -34,12 +34,17 @@ export default function RepoInput({ onJobStarted, isRunning }) {
 
     setSubmitting(true);
     try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 20000);
+
       const res = await fetch(`${API_URL}/api/repo/analyze`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ repoUrl, instruction }),
+        signal: controller.signal,
       });
 
+      clearTimeout(timeout);
       const data = await res.json();
       if (!res.ok) {
         setError(data.error || "Failed to queue analysis job.");
@@ -48,7 +53,11 @@ export default function RepoInput({ onJobStarted, isRunning }) {
 
       onJobStarted(data.jobId, repoUrl, instruction);
     } catch (err) {
-      setError("Could not reach backend gateway. Make sure backend service is running on port 5000.");
+      if (err.name === "AbortError") {
+        setError("Backend timed out. The server may be waking up — try again in a moment.");
+      } else {
+        setError("Could not reach backend gateway. Check that the backend service is running.");
+      }
     } finally {
       setSubmitting(false);
     }

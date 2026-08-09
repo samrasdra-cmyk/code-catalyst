@@ -19,14 +19,15 @@ router.post("/analyze", async (req, res) => {
   }
 
   const jobId = crypto.randomUUID();
+  const port = process.env.PORT || 5000;
 
   try {
-    await publishJob(jobId, repoUrl, instruction);
+    await publishJob(jobId, repoUrl, instruction, port);
     return res.status(202).json({ jobId, status: "queued" });
   } catch (err) {
     console.error("[repo] failed to enqueue job", err);
     return res.status(503).json({
-      error: "Could not reach the job queue. Is RabbitMQ running (docker-compose up)?",
+      error: "Could not start analysis job. Check backend logs for details.",
     });
   }
 });
